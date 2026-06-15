@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv
+venv/
+env/
+
+# Uploaded user data — generated at runtime, never commit
+backend/uploads/
+backend/store/
+
+# Model caches — huge, never commit
+.cache/
+models/
+*.bin
+*.safetensors
+*.onnx
+
+# Vector DBs
+chroma/
+qdrant_storage/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# Environment
+.env
+
+# Planning docs
+idea.md

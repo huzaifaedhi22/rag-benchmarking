@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+python-multipart
+tiktoken
+pypdf
+bm25s
+sentence-transformers
+chromadb
+pylate
+transformers
+ranx
+python-dotenv
+groq
