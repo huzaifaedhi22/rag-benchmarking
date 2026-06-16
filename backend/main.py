@@ -1,5 +1,7 @@
 import json
 import os
+import queue
+import threading
 import uuid
 
 from dotenv import load_dotenv
@@ -59,19 +61,33 @@ async def benchmark(job_id: str):
         raise HTTPException(status_code=404, detail="Job not found")
 
     def event_stream():
-        golden = generate_golden_set(chunks)
-        if not golden:
-            yield f"data: {json.dumps({'type': 'error', 'message': 'Golden set generation failed'})}\n\n"
-            return
+        q: queue.Queue = queue.Queue()
 
-        yield f"data: {json.dumps({'type': 'start', 'chunk_count': len(chunks), 'question_count': len(golden)})}\n\n"
+        def worker():
+            try:
+                golden = generate_golden_set(chunks)
+                if not golden:
+                    q.put({"type": "error", "message": "Golden set generation failed"})
+                    return
+                q.put({"type": "start", "chunk_count": len(chunks), "question_count": len(golden)})
+                all_results = []
+                for result in stream_benchmark(chunks, golden):
+                    all_results.append(result)
+                    q.put({"type": "result", **result})
+                sorted_results = sorted(all_results, key=lambda x: x["ndcg@10"], reverse=True)
+                q.put({"type": "done", "results": sorted_results})
+            except Exception as e:
+                q.put({"type": "error", "message": str(e)})
 
-        all_results = []
-        for result in stream_benchmark(chunks, golden):
-            all_results.append(result)
-            yield f"data: {json.dumps({'type': 'result', **result})}\n\n"
+        threading.Thread(target=worker, daemon=True).start()
 
-        sorted_results = sorted(all_results, key=lambda x: x["ndcg@10"], reverse=True)
-        yield f"data: {json.dumps({'type': 'done', 'results': sorted_results})}\n\n"
+        while True:
+            try:
+                event = q.get(timeout=20)
+                yield f"data: {json.dumps(event)}\n\n"
+                if event["type"] in ("done", "error"):
+                    break
+            except queue.Empty:
+                yield ": keepalive\n\n"  # prevents Railway proxy from closing idle SSE connections
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")
